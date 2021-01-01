@@ -1,0 +1,114 @@
+/* This application functions as follows:
+- implements search of Wikipedia articles which provides suggested results on each key stroke
+- suggested results show additional description and an image
+- when user clicks on a link to an article, a pop-up displays article summary and an option to read full article
+*/
+$(document).ready(function(){
+  
+  $('#clearButton').click(function(){
+    $('#searchField').val('');
+    $('#output').empty();
+  });
+
+  //On key stroke, bring up search results and locate main article image
+  $('#searchField').keyup(function(){             
+    var searchWord = $('#searchField').val();
+    var imageURL = "https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages%7Cpageterms&generator=prefixsearch&redirects=1&formatversion=2&piprop=thumbnail&pithumbsize=250&pilimit=15&wbptterms=description&gpssearch=" + searchWord + "&gpslimit=15";
+    //Clear results from previous search, then get and show new data from Wikipedia 
+    $('#output').empty();
+    $.ajax({
+      type: "GET",
+      url: imageURL,
+      dataType: "jsonp",
+      success: function(data){
+        createSearchResults(data);
+      }, 
+      error: function(errorMessage){
+        alert("Image Error");
+      }
+    }); 
+  });
+
+  function updateRow(title, image){
+    var titleURL = "https://en.wikipedia.org/w/api.php?action=opensearch&format=json&search=" + title + "&limit=15&callback=?";
+    $.ajax({
+      type: "GET",
+      url: titleURL,
+      dataType: "jsonp",
+      async: false,
+      success: function(newData){
+        createLink(newData, image);   
+      },
+      error: function(errorMessage) {
+        alert("Search Error");
+      }
+    }) 
+  };
+  
+  //encode special characters
+  function convert(text)
+  {
+    text = text.replace(/&/g, "&amp;");
+    text = text.replace(/>/g, "&gt;");
+    text = text.replace(/</g, "&lt;");
+    text = text.replace(/"/g, "&quot;");
+    text = text.replace(/'/g, "&#39;");
+    return text;
+  }
+  
+  function createLink(newData, image){    
+    var articleURL = newData[3][0];
+    var articleName = convert(newData[1][0]);
+    var articleDesc = convert(newData[2][0]);
+    
+    //build a result in output
+    $('#output').append(`<div class="shadowbox"> 
+                         <div class="text-center">
+                         <button type="link" 
+                          onclick="viewArticle('${articleURL}', '${articleName}', '${articleDesc}')">
+                            <img src='${image}' class = 'responsive-img valign'>                          
+                            <p><h4>${articleName}</h4></p></button>
+                            <p>${articleDesc}</p></div></div> `
+                        ); 
+  };
+
+  //list results by index value
+  function updateResults(indexArray, imageArray, titleArray){     
+    for (i = 0 ; i < indexArray.length ; i++){
+      for (j = 0 ; j < indexArray.length ; j++){
+        if ( i == indexArray[j]){
+          updateRow(titleArray[j], imageArray[j]);   
+        }
+      }
+    } 
+  };
+  
+  function createSearchResults(newData){
+    var imageArray = [];
+    var titleArray = [];
+    var indexArray = [];
+    
+    // 1. Order image results by index number
+    // 2. get main image for article if it exists, otherwise display default image
+    // 3. get name of article
+    for (var i = 0; i < newData.query.pages.length; i++){
+      indexArray[i] = newData.query.pages[i].index - 1;
+      if (newData.query.pages[i].hasOwnProperty("thumbnail") === true){
+        imageArray[i] = newData.query.pages[i].thumbnail.source;
+      } else{
+        imageArray[i] = "https://www.wikipedia.org/portal/wikipedia.org/assets/img/Wikipedia-logo-v2.png";
+      } 
+      titleArray[i] = newData.query.pages[i].title;
+    }
+    
+    updateResults(indexArray, imageArray, titleArray);   
+  };
+});
+
+//Display pop-up when article is selected
+function viewArticle(url, name, desc){
+  document.getElementById('readArticleButton').href = url;
+  document.getElementById('articleBody').innerHTML = desc;
+  document.getElementById('articleName').innerHTML = name;
+  $('#viewArticleModal').modal();
+}
